@@ -4,6 +4,9 @@ x-backend: &backend
   env_file: .env
   environment:
     DATABASE_URL: postgresql+psycopg://marketbrain:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres/marketbrain
+  volumes:
+    - broker_keys:/var/lib/marketbrain/keys
+    - broker_tokens:/var/lib/marketbrain/tokens
   restart: unless-stopped
 services:
   postgres:
@@ -72,3 +75,5 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  broker_keys:
+  broker_tokens:

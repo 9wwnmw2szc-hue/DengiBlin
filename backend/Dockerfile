@@ -4,6 +4,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 RUN useradd --create-home --uid 10001 marketbrain
+RUN mkdir -p /var/lib/marketbrain/keys /var/lib/marketbrain/tokens && chown -R marketbrain:marketbrain /var/lib/marketbrain && chmod 700 /var/lib/marketbrain/keys /var/lib/marketbrain/tokens
 COPY . .
 USER marketbrain
 EXPOSE 8000

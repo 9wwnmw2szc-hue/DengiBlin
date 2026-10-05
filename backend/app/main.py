@@ -6,7 +6,6 @@ from typing import Annotated
 from fastapi import FastAPI, Depends, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
-from redis import Redis
 from redis.exceptions import RedisError
 from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -15,10 +14,13 @@ from app.auth import COOKIE, create_session, current_user, digest, hasher, verif
 from app.config import settings
 from app.db import get_db
 from app.models import AuditEvent, Decision, Portfolio, Session, Subscription, User
+from app.models import BrokerConnection
+from app.infrastructure import cache
+from app.broker_routes import router as broker_router
+from app.market_data import connection_status, aware
 
-app = FastAPI(title="MarketBrain", version="0.1.0-foundation")
-cache = Redis.from_url(settings.redis_url, decode_responses=True,
-                       socket_connect_timeout=2, socket_timeout=2)
+app = FastAPI(title="MarketBrain", version="0.2.0-sandbox-data")
+app.include_router(broker_router)
 log = logging.getLogger("marketbrain")
 logging.basicConfig(level=logging.INFO, format='{"level":"%(levelname)s","message":"%(message)s"}')
 DB = Annotated[DBSession, Depends(get_db)]
@@ -142,20 +144,26 @@ def dashboard(db: DB, user: Principal):
         worker_ok = bool(heartbeat and time.time() - float(heartbeat) < 45)
     except RedisError:
         worker_ok = False
+    broker = connection_status(db.get(BrokerConnection, user.id))
+    blockers = ["Торговый цикл ещё не реализован"]
+    if broker['status'] != 'CONNECTED':
+        blockers.insert(0, "T-Invest Sandbox не готов")
+    if not broker['fresh']:
+        blockers.insert(0, "Нет свежего снимка данных")
     return {
         "user": {"email": user.email, "role": user.role},
         "mode": "SANDBOX", "real_enabled": False,
         "portfolio": {"equity": str(p.cash), "cash": str(p.cash), "invested": "0",
                       "initial_capital": str(p.initial_capital), "positions": []},
         "autopilot": "STOPPED", "safe_mode": True,
-        "broker": "NOT_CONNECTED", "market": "UNKNOWN", "worker_healthy": worker_ok,
-        "blockers": ["T-Invest не подключён", "Нет подтверждённых рыночных данных",
-                     "Торговый цикл ещё не реализован"],
+        "broker": broker['status'], "broker_connection": broker,
+        "market": "UNKNOWN", "worker_healthy": worker_ok,
+        "blockers": blockers,
         "risk": {"trade": str(settings.risk_per_trade), "position": str(settings.max_position),
                  "exposure": str(settings.max_exposure), "daily_loss": str(settings.max_daily_loss),
                  "drawdown": str(settings.max_drawdown)},
-        "events": [{"id": e.id, "at": e.created_at.isoformat(), "event": e.event, "details": e.details} for e in events],
-        "decisions": [{"id": d.id, "at": d.created_at.isoformat(), "action": d.action,
+        "events": [{"id": e.id, "at": aware(e.created_at).isoformat(), "event": e.event, "details": e.details} for e in events],
+        "decisions": [{"id": d.id, "at": aware(d.created_at).isoformat(), "action": d.action,
                        "reason": d.reason, "evidence": d.evidence} for d in decisions],
     }
 
@@ -179,9 +187,11 @@ def balance(body: Balance, db: DB, user: Principal):
 @app.post("/api/autopilot/start")
 def start(db: DB, user: Principal):
     portfolio(db, user, lock=True)
-    audit(db, user, "AUTOPILOT_START_REJECTED", {"reason": "DATA_PIPELINE_NOT_READY"})
-    db.add(Decision(user_id=user.id, action="SKIP", reason="DATA_PIPELINE_NOT_READY",
-                    evidence={"broker": "NOT_CONNECTED", "market": "UNKNOWN"}))
+    broker = connection_status(db.get(BrokerConnection, user.id))
+    reason = 'TRADING_LOOP_NOT_READY' if broker['status'] == 'CONNECTED' and broker['fresh'] else 'DATA_PIPELINE_NOT_READY'
+    audit(db, user, "AUTOPILOT_START_REJECTED", {"reason": reason})
+    db.add(Decision(user_id=user.id, action="SKIP", reason=reason,
+                    evidence={"broker": broker['status'], "last_sync_at":broker['last_sync_at'], "trading_loop": "NOT_IMPLEMENTED"}))
     db.commit()
     raise HTTPException(409, "Autopilot заблокирован: нужны T-Invest, данные и проверенный торговый цикл")
 

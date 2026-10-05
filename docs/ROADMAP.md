@@ -1,0 +1,29 @@
+# Статус по MASTER-ТЗ
+
+## Выполненный первый срез
+
+Этап 0: созданы backend/frontend, Compose PostgreSQL/Redis, миграции, worker, health checks, настройки окружения и workflow CI. Локальная сборка и тесты проверяются отдельно от Docker интеграции. Docker отсутствует в среде автора: итог полного запуска подтверждается workflow инфраструктуры после выполнения GitHub Actions.
+
+Части этапов 4 и 6: чистое ядро BUY risk sizing, правила order state machine, регистрация/сессии, Sandbox баланс, интерфейс состояния и журналы. Это не завершённые этапы Decision + Risk или Web UI.
+
+## Очередь реализации
+
+1. T-Invest: контракт брокера, Sandbox account selection, encrypted token storage, read-only инструменты/свечи/цены/статусы/портфель/заявки; streaming, gaps, history persistence.
+2. Аналитика: нормализованные snapshots, SMA/EMA/RSI/MACD/ATR/Bollinger/VWAP/ADX, свечи, объёмы, контекст рынка и разрешённые новости.
+3. Шесть независимых стратегий, Strategy Lab, сигналы с evidence и score без ложной вероятности.
+4. Decision Engine, полный Risk Engine для BUY/REDUCE/SELL и Exit Engine. Пересчёт портфеля и limits из актуальных снимков.
+5. Sandbox Autopilot, резервирование cash, Order Manager, partial fills, идемпотентность, distributed locks, reconciliation, сделки и результаты. Stop блокирует входы, но продолжает контроль позиций.
+6. Market, Stock Intelligence, Strategy Lab, Trade History, Performance и AI Analyst с фактическим evidence, SSE, подтверждаемый Emergency Exit.
+7. Telegram alerts и разрешённые команды. Никаких BUY/SELL из Telegram.
+8. Backtest с комиссиями/spread/slippage/лотами, out-of-sample, прогнозы, Research/Candidate/manual promotion.
+9. Длительный paper test с benchmark и анализом технических ошибок.
+10. REAL read-only, проверка фактического портфеля и сверки.
+11. REAL controlled — только после отдельного решения владельца.
+
+## Условия для интеграционного теста T-Invest
+
+Токен Sandbox с минимальными разрешениями, выбор Sandbox-счёта и настройка защищённого хранилища. Пользователь вводит токен только в безопасном интерфейсе подключения, когда он будет реализован. До этого нельзя называть систему CONNECTED или показывать рыночные числа.
+
+## Критерий завершения MVP
+
+Все 17 пунктов раздела 74 исходного ТЗ, включая автономный цикл на виртуальных средствах, Telegram, лабораторию стратегий и объяснения. Текущий Foundation **ещё не соответствует этому критерию**.
